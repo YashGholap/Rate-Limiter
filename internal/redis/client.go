@@ -2,18 +2,22 @@ package redis
 
 import (
 	"context"
+	"fmt"
 
 	goredis "github.com/redis/go-redis/v9"
 )
 
 type Config struct {
-	Addr string
+	URL string
 }
 
-func NewClient(config Config) *goredis.Client {
-	return goredis.NewClient(&goredis.Options{
-		Addr: config.Addr,
-	})
+func NewClient(config Config) (*goredis.Client, error) {
+	options, err := goredis.ParseURL(config.URL)
+	if err != nil {
+		return nil, fmt.Errorf("invalid Redis URL: %w", err)
+	}
+
+	return goredis.NewClient(options), nil
 }
 
 func Ping(ctx context.Context, client *goredis.Client) error {

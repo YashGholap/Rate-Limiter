@@ -2,45 +2,67 @@ package main
 
 import (
 	"context"
-	"fmt"
+	"flag"
 	"log"
+	"net/http"
+	"time"
 
+	"github.com/YashGholap/rate-limiter/internal/config"
+	"github.com/YashGholap/rate-limiter/internal/httpapi"
 	"github.com/YashGholap/rate-limiter/internal/limiter"
 	"github.com/YashGholap/rate-limiter/internal/redis"
+	redisclient "github.com/YashGholap/rate-limiter/internal/redis"
 )
 
 func main() {
 
-	client := redis.NewClient(redis.Config{
-		Addr: "localhost:6379",
+	envPath := flag.String("env", ".env", "path to the environment file")
+	flag.Parse()
+
+	cfg, err := config.Load(*envPath)
+	if err != nil {
+		log.Fatalf("configuration error: %v", err)
+	}
+
+	client, err := redis.NewClient(redis.Config{
+		URL: cfg.RedisURL,
 	})
+	if err != nil {
+		log.Fatalf("Redis configuration error: %v", err)
+	}
 
 	defer client.Close()
 
-	ctx := context.Background()
-
-	if err := redis.Ping(ctx, client); err != nil {
-		log.Fatal(err)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	err = redisclient.Ping(ctx, client)
+	cancel()
+	if err != nil {
+		log.Fatalf("Redis connection failed: %v", err)
 	}
 
 	rateLimiter := limiter.NewRedisLimiter(
 		client,
 		limiter.Config{
-			Capacity:   5,
-			RefillRate: 1,
+			Capacity:   cfg.RateLimitCapacity,
+			RefillRate: cfg.RateLimitRefill,
 		},
 	)
 
-	fmt.Println("Rate Limiter starting...")
-	fmt.Println("Redis connection successful")
+	handler := httpapi.NewHandler(rateLimiter)
 
-	for i := 1; i <= 7; i++ {
-		allowed, err := rateLimiter.Allow(ctx, "user:123")
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/resource", handler.Resource)
 
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		fmt.Printf("Request %d: allowed=%v\n", i, allowed)
+	server := &http.Server{
+		Addr:              cfg.HTTPAddr,
+		Handler:           mux,
+		ReadHeaderTimeout: 5 * time.Second,
 	}
+
+	log.Printf("Rate limiter API listening on %s", cfg.HTTPAddr)
+
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		log.Fatalf("HTTP server failed: %v", err)
+	}
+
 }
