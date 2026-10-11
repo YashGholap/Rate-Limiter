@@ -28,12 +28,21 @@ func NewRedisLimiter(client *goredis.Client, config Config) *RedisLimiter {
 func (rl *RedisLimiter) Allow(ctx context.Context, key string) (bool, error) {
 	redisKey := "rate_limit:" + key
 
+	ttlSeconds := 1.0
+	if rl.config.RefillRate > 0 {
+		ttlSeconds = 2 * rl.config.Capacity / rl.config.RefillRate
+		if ttlSeconds < 1 {
+			ttlSeconds = 1
+		}
+	}
+
 	result, err := rl.client.Eval(
 		ctx,
 		tokenBucketScript,
 		[]string{redisKey},
 		rl.config.Capacity,
 		rl.config.RefillRate,
+		ttlSeconds,
 	).Result()
 
 	if err != nil {

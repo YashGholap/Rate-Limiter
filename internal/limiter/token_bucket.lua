@@ -2,6 +2,7 @@ local key = KEYS[1]
 
 local capacity = tonumber(ARGV[1])
 local refill_rate = tonumber(ARGV[2])
+local ttl_seconds = tonumber(ARGV[3])
 
 local time = redis.call("TIME")
 local now_seconds = time[1] + (time[2] / 1000000)
@@ -31,6 +32,8 @@ if tokens < 1 then
         "last_refill", last_refill
     )
 
+    redis.call("EXPIRE", key, math.ceil(ttl_seconds))
+
     return 0
 end
 
@@ -43,4 +46,5 @@ redis.call(
     "last_refill", last_refill
 )
 
+redis.call("EXPIRE", key, math.ceil(ttl_seconds))
 return 1
