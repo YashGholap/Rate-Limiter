@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"flag"
 	"log"
 	"net/http"
 	"time"
@@ -16,10 +15,9 @@ import (
 
 func main() {
 
-	envPath := flag.String("env", ".env", "path to the environment file")
-	flag.Parse()
+	
 
-	cfg, err := config.Load(*envPath)
+	cfg, err := config.LoadFromEnvironment()
 	if err != nil {
 		log.Fatalf("configuration error: %v", err)
 	}

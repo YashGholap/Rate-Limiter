@@ -78,3 +78,52 @@ func parsePositiveFloat(
 
 	return value, nil
 }
+
+
+func LoadFromEnvironment() (Config, error) {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		return Config{}, fmt.Errorf("REDIS_URL is required")
+	}
+
+	httpAddr := os.Getenv("HTTP_ADDR")
+	if httpAddr == "" {
+		httpAddr = ":8082"
+	}
+
+	capacity, err := parsePositiveEnv("RATE_LIMIT_CAPACITY", 10)
+	if err != nil {
+		return Config{}, err
+	}
+
+	refillRate, err := parsePositiveEnv("RATE_LIMIT_REFILL_RATE", 2)
+	if err != nil {
+		return Config{}, err
+	}
+
+	return Config{
+		RedisURL:          redisURL,
+		HTTPAddr:          httpAddr,
+		RateLimitCapacity: capacity,
+		RateLimitRefill:   refillRate,
+	}, nil
+}
+
+
+func parsePositiveEnv(key string, defaultValue float64) (float64, error) {
+	raw := os.Getenv(key)
+	if raw == "" {
+		return defaultValue, nil
+	}
+
+	value, err := strconv.ParseFloat(raw, 64)
+	if err != nil {
+		return 0, fmt.Errorf("%s must be a number: %w", key, err)
+	}
+
+	if value <= 0 {
+		return 0, fmt.Errorf("%s must be greater than zero", key)
+	}
+
+	return value, nil
+}
